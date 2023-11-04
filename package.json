@@ -1,0 +1,21 @@
+{
+  "name": "graph",
+  "version": "1.0.0",
+  "description": "Helper for working on graph tasks",
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "tsc"
+  },
+  "keywords": [
+    "graph",
+    "typescript",
+    "ts"
+  ],
+  "author": "Denis Romodanov",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.8.10",
+    "typescript": "^5.2.2"
+  }
+}
