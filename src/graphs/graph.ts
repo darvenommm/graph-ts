@@ -1,8 +1,9 @@
+import deepcopy from 'deepcopy';
+
 import { Node } from '../node/node.js';
 import { Edge } from '../edge/edge.js';
 import { ErrorNotFoundNode, ErrorNodeExist, ErrorGraphTransformToPrimitive } from './errors.js';
 
-import type { IEdgeSettings } from '../edge/types.js';
 import type {
   INodes,
   TNodesSettings,
@@ -13,21 +14,22 @@ import type {
   TExtendedEdgesStatistics,
   IGraph,
 } from './types.js';
-import { INodeSettings } from '../node/types.js';
+import type { INodeSettings } from '../node/types';
+import type { IEdgeSettings } from '../edge/types';
 
 // TODO BFS, DFS
 
 export class Graph implements IGraph {
-  #nodes: INodes = {};
-  #structure: IConnections<IEdgesStatistics> = {};
+  private nodes: INodes = {};
+  private structure: IConnections<IEdgesStatistics> = {};
 
   constructor(nodesSettings: TNodesSettings, connectionsSettings: IConnections) {
-    this.#initNodes(nodesSettings);
-    this.#initStructure(connectionsSettings);
+    this.initNodes(nodesSettings);
+    this.initStructure(connectionsSettings);
   }
 
   public show(): void {
-    console.log(this.#getGraphInString());
+    console.log(this.getGraphInString());
   }
 
   public addNodes(nodesSettings: TNodesSettings): void {
@@ -38,10 +40,10 @@ export class Graph implements IGraph {
     for (const nodeSettings of nodesSettings) {
       const node = new Node(nodeSettings);
       const nodeName = node.name;
-      this.#checkNotFoundingNode(nodeName);
+      this.checkNotFoundingNode(nodeName);
 
-      this.#nodes[nodeName] = node;
-      this.#structure[nodeName] = {};
+      this.nodes[nodeName] = node;
+      this.structure[nodeName] = {};
     }
   }
 
@@ -53,12 +55,12 @@ export class Graph implements IGraph {
     for (const nodeSettings of nodesSettings) {
       const node = new Node(nodeSettings);
       const nodeName = node.name;
-      this.#checkExistingNode(nodeName);
+      this.checkExistingNode(nodeName);
 
-      delete this.#nodes[nodeName];
-      delete this.#structure[nodeName];
+      delete this.nodes[nodeName];
+      delete this.structure[nodeName];
 
-      for (const [fromNodeName, connections] of Object.entries(this.#structure)) {
+      for (const [fromNodeName, connections] of Object.entries(this.structure)) {
         if (fromNodeName === nodeName) {
           continue;
         }
@@ -70,11 +72,11 @@ export class Graph implements IGraph {
 
   public addConnections(connectionsSettings: IConnections): void {
     for (const [fromNodeName, newConnections] of Object.entries(connectionsSettings)) {
-      this.#checkExistingNode(fromNodeName);
+      this.checkExistingNode(fromNodeName);
 
       for (const [toNodeName, edges] of Object.entries(newConnections)) {
-        this.#checkExistingNode(toNodeName);
-        this.#addNewEdgesStatisticsForNodes(fromNodeName, toNodeName, edges);
+        this.checkExistingNode(toNodeName);
+        this.addNewEdgesStatisticsForNodes(fromNodeName, toNodeName, edges);
       }
     }
   }
@@ -83,14 +85,21 @@ export class Graph implements IGraph {
     const fromNodeName = fromNode.name;
     const toNodeName = toNode.name;
 
-    this.#checkExistingNode(fromNodeName);
-    this.#checkExistingNode(fromNodeName);
+    this.checkExistingNode(fromNodeName);
+    this.checkExistingNode(fromNodeName);
 
-    delete this.#structure[fromNodeName][toNodeName];
-    delete this.#structure[toNodeName][fromNodeName];
+    delete this.structure[fromNodeName][toNodeName];
+    delete this.structure[toNodeName][fromNodeName];
   }
 
-  #initNodes(nodesSettings: TNodesSettings): void {
+  public copy(): IGraph {
+    return Object.create(
+      Object.getPrototypeOf(this),
+      deepcopy(Object.getOwnPropertyDescriptors(this)),
+    );
+  }
+
+  private initNodes(nodesSettings: TNodesSettings): void {
     if (!Array.isArray(nodesSettings)) {
       nodesSettings = [nodesSettings];
     }
@@ -98,55 +107,58 @@ export class Graph implements IGraph {
     for (const nodeSettings of nodesSettings) {
       const node = new Node(nodeSettings);
       const nodeName = node.name;
-      this.#checkNotFoundingNode(nodeName);
+      this.checkNotFoundingNode(nodeName);
 
-      this.#nodes[nodeName] = node;
-      this.#structure[nodeName] = {};
+      this.nodes[nodeName] = node;
+      this.structure[nodeName] = {};
     }
   }
 
-  #initStructure(connectionsSettings: IConnections): void {
+  private initStructure(connectionsSettings: IConnections): void {
     for (const [fromNodeName, connections] of Object.entries(connectionsSettings)) {
-      this.#checkExistingNode(fromNodeName);
+      this.checkExistingNode(fromNodeName);
 
       for (const [toNodeName, edgesSettings] of Object.entries(connections)) {
-        this.#checkExistingNode(toNodeName);
-        this.#addNewEdgesStatisticsForNodes(fromNodeName, toNodeName, edgesSettings);
+        this.checkExistingNode(toNodeName);
+        this.addNewEdgesStatisticsForNodes(fromNodeName, toNodeName, edgesSettings);
       }
     }
   }
 
-  #addNewEdgesStatisticsForNodes(
+  private addNewEdgesStatisticsForNodes(
     fromNodeName: string,
     toNodeName: string,
     edgesStatistics: TEdgeSettings,
   ): void {
-    const extendedEdgesStatistics = this.#calculateEdgesStatistics(edgesStatistics);
+    const extendedEdgesStatistics = this.calculateEdgesStatistics(edgesStatistics);
     const { min, max, all } = extendedEdgesStatistics;
     const { minDouble, maxDouble, allDouble } = extendedEdgesStatistics;
 
-    this.#updateStatisticsForNodes(fromNodeName, toNodeName, { min, max, all });
-    this.#updateStatisticsForNodes(toNodeName, fromNodeName, {
+    this.updateStatisticsForNodes(fromNodeName, toNodeName, { min, max, all });
+    this.updateStatisticsForNodes(toNodeName, fromNodeName, {
       min: minDouble,
       max: maxDouble,
       all: allDouble,
     });
   }
 
-  #getEdgesStatistics(fromNodeName: string, toNodeName: string): IEdgesStatistics | undefined {
-    return this.#structure[fromNodeName][toNodeName];
+  private getEdgesStatistics(
+    fromNodeName: string,
+    toNodeName: string,
+  ): IEdgesStatistics | undefined {
+    return this.structure[fromNodeName][toNodeName];
   }
 
-  #calculateEdgesStatistics(edgesSettings: TEdgeSettings): TExtendedEdgesStatistics {
-    const { all, allDouble } = this.#getSingleAndDoubleEdges(edgesSettings);
+  private calculateEdgesStatistics(edgesSettings: TEdgeSettings): TExtendedEdgesStatistics {
+    const { all, allDouble } = this.getSingleAndDoubleEdges(edgesSettings);
 
-    const { min, max } = this.#getMinAndMaxEdge(all);
-    const { min: minDouble, max: maxDouble } = this.#getMinAndMaxEdge(allDouble);
+    const { min, max } = this.getMinAndMaxEdge(all);
+    const { min: minDouble, max: maxDouble } = this.getMinAndMaxEdge(allDouble);
 
     return { min, max, all, allDouble, minDouble, maxDouble };
   }
 
-  #getSingleAndDoubleEdges(
+  private getSingleAndDoubleEdges(
     edgesSettings: TEdgeSettings,
   ): Pick<TExtendedEdgesStatistics, 'all' | 'allDouble'> {
     if (!Array.isArray(edgesSettings)) {
@@ -169,7 +181,7 @@ export class Graph implements IGraph {
     return { all, allDouble };
   }
 
-  #getMinAndMaxEdge(edges: Edge[]): Pick<TEdgesStatisticsWithEmptyValues, 'min' | 'max'> {
+  private getMinAndMaxEdge(edges: Edge[]): Pick<TEdgesStatisticsWithEmptyValues, 'min' | 'max'> {
     if (edges.length === 0) {
       return { min: null, max: null };
     }
@@ -190,7 +202,7 @@ export class Graph implements IGraph {
     return { min, max };
   }
 
-  #updateStatisticsForNodes(
+  private updateStatisticsForNodes(
     fromNodeName: string,
     toNodeName: string,
     edgesStatistics: TEdgesStatisticsWithEmptyValues,
@@ -201,24 +213,24 @@ export class Graph implements IGraph {
       return;
     }
 
-    const fromToStatistics = this.#getEdgesStatistics(fromNodeName, toNodeName);
+    const fromToStatistics = this.getEdgesStatistics(fromNodeName, toNodeName);
 
     if (!fromToStatistics) {
-      this.#structure[fromNodeName][toNodeName] = { min, max, all };
+      this.structure[fromNodeName][toNodeName] = { min, max, all };
       return;
     }
 
-    this.#structure[fromNodeName][toNodeName] = {
+    this.structure[fromNodeName][toNodeName] = {
       min: fromToStatistics.min > min ? min : fromToStatistics.min,
       max: fromToStatistics.max > max ? fromToStatistics.max : max,
       all: [...fromToStatistics.all, ...all],
     };
   }
 
-  #getGraphInString(): string {
+  private getGraphInString(): string {
     let result = '';
 
-    for (const [fromNodeName, connections] of Object.entries(this.#structure)) {
+    for (const [fromNodeName, connections] of Object.entries(this.structure)) {
       result += `Node: ${fromNodeName}\n`;
 
       if (Object.entries(connections).length === 0) {
@@ -240,17 +252,17 @@ export class Graph implements IGraph {
       throw new ErrorGraphTransformToPrimitive();
     }
 
-    return this.#getGraphInString();
+    return this.getGraphInString();
   }
 
-  #checkNotFoundingNode(nodeName: string): never | void {
-    if (this.#nodes[nodeName]) {
+  private checkNotFoundingNode(nodeName: string): never | void {
+    if (this.nodes[nodeName]) {
       throw new ErrorNodeExist();
     }
   }
 
-  #checkExistingNode(nodeName: string): never | void {
-    if (!this.#nodes[nodeName]) {
+  private checkExistingNode(nodeName: string): never | void {
+    if (!this.nodes[nodeName]) {
       throw new ErrorNotFoundNode();
     }
   }

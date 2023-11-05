@@ -41,4 +41,6 @@ export interface IGraph {
 
   addConnections(connectionsSettings: IConnections): void;
   removeAllConnections(fromNode: INodeSettings, toNode: INodeSettings): void;
+
+  copy(): IGraph;
 }

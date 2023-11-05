@@ -31,4 +31,8 @@ const graph = new Graph(nodes, {
   },
 });
 
-console.log(String(graph));
+const newGraph = graph.copy();
+
+graph.addNodes({ name: 'hello' });
+
+console.log(String(newGraph));
