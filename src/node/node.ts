@@ -1,11 +1,6 @@
-export interface INodeSettings {
-  name: string;
-  value?: unknown;
-}
+import { ErrorNodeTransformToPrimitive } from './errors.js';
 
-class ErrorNodeTransformToPrimitive extends Error {
-  message: string = 'Node can be transformed only to string!';
-}
+import type { INodeSettings } from './types';
 
 export class Node {
   #name: string;

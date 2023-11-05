@@ -1,5 +1,5 @@
-import type { Node, INodeSettings } from '../node/node';
-import type { Edge, IEdgeSettings } from '../edge/edge';
+import type { Node } from '../node/node';
+import type { Edge } from '../edge/edge';
 
 export interface INodes<T = Node> {
   [nodeName: string]: T;
@@ -9,14 +9,6 @@ export interface IConnections<T = Edge> {
   [fromNodeName: string]: {
     [toNodeName: string]: T;
   };
-}
-
-export interface IGraph {
-  show(): void;
-}
-
-export interface IGraphConstructor<T> {
-  new (nodes: INodeSettings[], connections: IConnections<IEdgeSettings[]>): T;
 }
 
 export interface IEdgesStatistics {

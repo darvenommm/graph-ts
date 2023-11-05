@@ -1,16 +1,11 @@
-export interface IEdgeSettings {
-  weight: number;
-  isBidirectional?: boolean;
-}
+import { ErrorEdgeTransformToPrimitive } from './errors.js';
+
+import type { IEdgeSettings } from './types';
 
 const DEFAULT_EDGE_SETTINGS: IEdgeSettings = {
   weight: 0,
   isBidirectional: true,
 };
-
-class ErrorEdgeTransformToPrimitive extends Error {
-  message: string = 'Edge can be transformed only to number!';
-}
 
 export class Edge {
   public weight: number;
