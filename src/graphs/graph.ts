@@ -1,144 +1,218 @@
 import { Node } from '../node/node.js';
 import { Edge } from '../edge/edge.js';
-import { ErrorNotFoundNode, ErrorNotGaveEdges, ErrorGraphTransformToPrimitive } from './errors.js';
+import { ErrorNotFoundNode, ErrorNodeExist, ErrorGraphTransformToPrimitive } from './errors.js';
 
-import type { INodeSettings } from '../node/types.js';
 import type { IEdgeSettings } from '../edge/types.js';
-import type { INodes, IConnections, IEdgesStatistics, IExtendedEdgesStatistics } from './types.js';
+import type {
+  INodes,
+  TNodesSettings,
+  TEdgeSettings,
+  IConnections,
+  IEdgesStatistics,
+  TEdgesStatisticsWithEmptyValues,
+  TExtendedEdgesStatistics,
+  IGraph,
+} from './types.js';
+import { INodeSettings } from '../node/types.js';
 
-type TStructure = IConnections<IEdgesStatistics>;
-
-// TODO check empty nodes
 // TODO BFS, DFS
-// TODO to yourself
 
-export class Graph {
+export class Graph implements IGraph {
   #nodes: INodes = {};
-  #structure: TStructure = {};
+  #structure: IConnections<IEdgesStatistics> = {};
 
-  constructor(
-    nodesSettings: INodeSettings[],
-    connectionsSettings: IConnections<IEdgeSettings | IEdgeSettings[]>,
-  ) {
-    this.#init(nodesSettings, connectionsSettings);
+  constructor(nodesSettings: TNodesSettings, connectionsSettings: IConnections) {
+    this.#initNodes(nodesSettings);
+    this.#initStructure(connectionsSettings);
   }
 
   public show(): void {
     console.log(this.#getGraphInString());
   }
 
-  #init(
-    nodesSettings: INodeSettings[],
-    connectionsSettings: IConnections<IEdgeSettings | IEdgeSettings[]>,
-  ): void {
-    this.#initNodes(nodesSettings);
-    this.#initStructure(connectionsSettings);
-  }
+  public addNodes(nodesSettings: TNodesSettings): void {
+    if (!Array.isArray(nodesSettings)) {
+      nodesSettings = [nodesSettings];
+    }
 
-  #initNodes(nodesSettings: INodeSettings[]): void {
     for (const nodeSettings of nodesSettings) {
       const node = new Node(nodeSettings);
       const nodeName = node.name;
+      this.#checkNotFoundingNode(nodeName);
 
       this.#nodes[nodeName] = node;
       this.#structure[nodeName] = {};
     }
   }
 
-  #initStructure(connectionsSettings: IConnections<IEdgeSettings | IEdgeSettings[]>): void {
-    for (const [fromNodeName, connections] of Object.entries(connectionsSettings)) {
-      this.#checkExistingNodeInNodes(fromNodeName);
+  public removeNodes(nodesSettings: TNodesSettings): void {
+    if (!Array.isArray(nodesSettings)) {
+      nodesSettings = [nodesSettings];
+    }
 
-      for (const [toNodeName, edgesSettings] of Object.entries(connections)) {
-        this.#checkExistingNodeInNodes(toNodeName);
-        const edgesStatistics = this.#getEdgesStatistics(edgesSettings);
-        this.#setEdgesStatisticsForNodes(fromNodeName, toNodeName, edgesStatistics);
+    for (const nodeSettings of nodesSettings) {
+      const node = new Node(nodeSettings);
+      const nodeName = node.name;
+      this.#checkExistingNode(nodeName);
+
+      delete this.#nodes[nodeName];
+      delete this.#structure[nodeName];
+
+      for (const [fromNodeName, connections] of Object.entries(this.#structure)) {
+        if (fromNodeName === nodeName) {
+          continue;
+        }
+
+        delete connections[nodeName];
       }
     }
   }
 
-  #getEdgesStatistics(edgesSettings: IEdgeSettings | IEdgeSettings[]): IExtendedEdgesStatistics {
+  public addConnections(connectionsSettings: IConnections): void {
+    for (const [fromNodeName, newConnections] of Object.entries(connectionsSettings)) {
+      this.#checkExistingNode(fromNodeName);
+
+      for (const [toNodeName, edges] of Object.entries(newConnections)) {
+        this.#checkExistingNode(toNodeName);
+        this.#addNewEdgesStatisticsForNodes(fromNodeName, toNodeName, edges);
+      }
+    }
+  }
+
+  public removeAllConnections(fromNode: INodeSettings, toNode: INodeSettings): void {
+    const fromNodeName = fromNode.name;
+    const toNodeName = toNode.name;
+
+    this.#checkExistingNode(fromNodeName);
+    this.#checkExistingNode(fromNodeName);
+
+    delete this.#structure[fromNodeName][toNodeName];
+    delete this.#structure[toNodeName][fromNodeName];
+  }
+
+  #initNodes(nodesSettings: TNodesSettings): void {
+    if (!Array.isArray(nodesSettings)) {
+      nodesSettings = [nodesSettings];
+    }
+
+    for (const nodeSettings of nodesSettings) {
+      const node = new Node(nodeSettings);
+      const nodeName = node.name;
+      this.#checkNotFoundingNode(nodeName);
+
+      this.#nodes[nodeName] = node;
+      this.#structure[nodeName] = {};
+    }
+  }
+
+  #initStructure(connectionsSettings: IConnections): void {
+    for (const [fromNodeName, connections] of Object.entries(connectionsSettings)) {
+      this.#checkExistingNode(fromNodeName);
+
+      for (const [toNodeName, edgesSettings] of Object.entries(connections)) {
+        this.#checkExistingNode(toNodeName);
+        this.#addNewEdgesStatisticsForNodes(fromNodeName, toNodeName, edgesSettings);
+      }
+    }
+  }
+
+  #addNewEdgesStatisticsForNodes(
+    fromNodeName: string,
+    toNodeName: string,
+    edgesStatistics: TEdgeSettings,
+  ): void {
+    const extendedEdgesStatistics = this.#calculateEdgesStatistics(edgesStatistics);
+    const { min, max, all } = extendedEdgesStatistics;
+    const { minDouble, maxDouble, allDouble } = extendedEdgesStatistics;
+
+    this.#updateStatisticsForNodes(fromNodeName, toNodeName, { min, max, all });
+    this.#updateStatisticsForNodes(toNodeName, fromNodeName, {
+      min: minDouble,
+      max: maxDouble,
+      all: allDouble,
+    });
+  }
+
+  #getEdgesStatistics(fromNodeName: string, toNodeName: string): IEdgesStatistics | undefined {
+    return this.#structure[fromNodeName][toNodeName];
+  }
+
+  #calculateEdgesStatistics(edgesSettings: TEdgeSettings): TExtendedEdgesStatistics {
+    const { all, allDouble } = this.#getSingleAndDoubleEdges(edgesSettings);
+
+    const { min, max } = this.#getMinAndMaxEdge(all);
+    const { min: minDouble, max: maxDouble } = this.#getMinAndMaxEdge(allDouble);
+
+    return { min, max, all, allDouble, minDouble, maxDouble };
+  }
+
+  #getSingleAndDoubleEdges(
+    edgesSettings: TEdgeSettings,
+  ): Pick<TExtendedEdgesStatistics, 'all' | 'allDouble'> {
     if (!Array.isArray(edgesSettings)) {
       edgesSettings = [edgesSettings];
     }
 
-    if (edgesSettings.length === 0) {
-      throw new ErrorNotGaveEdges();
-    }
-
-    let max: Edge = new Edge(edgesSettings[0]);
-    let min: Edge = new Edge(edgesSettings[0]);
-    let all: Edge[] = [];
-
-    let bidirectionalEdges: Edge[] = [];
-    let minBidirectional: Edge | null = null;
-    let maxBidirectional: Edge | null = null;
+    const all: Edge[] = [];
+    const allDouble: Edge[] = [];
 
     for (const edgeSettings of edgesSettings) {
       const edge = new Edge(edgeSettings);
-      const weight = edge.weight;
-
-      if (max.weight < weight) {
-        max = edge;
-      }
-
-      if (min.weight > weight) {
-        min = edge;
-      }
 
       if (edge.isBidirectional) {
-        bidirectionalEdges.push(edge);
-
-        if (!minBidirectional || minBidirectional.weight > weight) {
-          minBidirectional = edge;
-        }
-
-        if (!maxBidirectional || maxBidirectional.weight < weight) {
-          maxBidirectional = edge;
-        }
+        allDouble.push(edge);
       }
 
       all.push(edge);
     }
 
-    return { min, max, all, bidirectionalEdges, minBidirectional, maxBidirectional };
+    return { all, allDouble };
   }
 
-  #setEdgesStatisticsForNodes(
+  #getMinAndMaxEdge(edges: Edge[]): Pick<TEdgesStatisticsWithEmptyValues, 'min' | 'max'> {
+    if (edges.length === 0) {
+      return { min: null, max: null };
+    }
+
+    let min = edges[0];
+    let max = edges[0];
+
+    for (const edge of edges) {
+      if (edge < min) {
+        min = edge;
+      }
+
+      if (edge > max) {
+        max = edge;
+      }
+    }
+
+    return { min, max };
+  }
+
+  #updateStatisticsForNodes(
     fromNodeName: string,
     toNodeName: string,
-    edgesStatistics: IExtendedEdgesStatistics,
+    edgesStatistics: TEdgesStatisticsWithEmptyValues,
   ): void {
-    const fromTo = this.#structure[fromNodeName][toNodeName] ?? {};
-    const toFrom = this.#structure[toNodeName][fromNodeName] ?? {};
-    const { min, max, all, minBidirectional, maxBidirectional, bidirectionalEdges } =
-      edgesStatistics;
+    const { min, max, all } = edgesStatistics;
+
+    if (all.length === 0 || !max || !min) {
+      return;
+    }
+
+    const fromToStatistics = this.#getEdgesStatistics(fromNodeName, toNodeName);
+
+    if (!fromToStatistics) {
+      this.#structure[fromNodeName][toNodeName] = { min, max, all };
+      return;
+    }
 
     this.#structure[fromNodeName][toNodeName] = {
-      min: (fromTo.min?.weight ?? Infinity) > min.weight ? min : fromTo.min,
-      max: (fromTo.max?.weight ?? -Infinity) > max.weight ? fromTo.max : max,
-      all: [...(fromTo.all ?? []), ...all],
+      min: fromToStatistics.min > min ? min : fromToStatistics.min,
+      max: fromToStatistics.max > max ? fromToStatistics.max : max,
+      all: [...fromToStatistics.all, ...all],
     };
-
-    if (bidirectionalEdges.length > 0) {
-      this.#structure[toNodeName][fromNodeName] = {
-        min:
-          (toFrom.min?.weight ?? Infinity) > minBidirectional!.weight
-            ? minBidirectional!
-            : toFrom.min,
-        max:
-          (toFrom.max?.weight ?? -Infinity) > maxBidirectional!.weight
-            ? toFrom.max
-            : maxBidirectional!,
-        all: [...(toFrom.all ?? []), ...bidirectionalEdges],
-      };
-    }
-  }
-
-  #checkExistingNodeInNodes(nodeName: string): never | void {
-    if (!this.#nodes[nodeName]) {
-      throw new ErrorNotFoundNode();
-    }
   }
 
   #getGraphInString(): string {
@@ -167,5 +241,17 @@ export class Graph {
     }
 
     return this.#getGraphInString();
+  }
+
+  #checkNotFoundingNode(nodeName: string): never | void {
+    if (this.#nodes[nodeName]) {
+      throw new ErrorNodeExist();
+    }
+  }
+
+  #checkExistingNode(nodeName: string): never | void {
+    if (!this.#nodes[nodeName]) {
+      throw new ErrorNotFoundNode();
+    }
   }
 }

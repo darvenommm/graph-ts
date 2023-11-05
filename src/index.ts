@@ -12,7 +12,7 @@ const graph = new Graph(nodes, {
     C: { weight: 7, isBidirectional: false },
   },
   B: {
-    D: [{ weight: 12 }],
+    D: { weight: 12 },
   },
   D: {
     B: { weight: 10 },
@@ -27,10 +27,7 @@ const graph = new Graph(nodes, {
       { weight: 5, isBidirectional: false },
       { weight: 4, isBidirectional: false },
     ],
-    F: [
-      { weight: 3, isBidirectional: false },
-      { weight: 4, isBidirectional: false },
-    ],
+    F: [{ weight: 3 }, { weight: -2 }],
   },
 });
 
