@@ -19,8 +19,6 @@ import type {
 } from './types.js';
 import type { INodeSettings } from '../node/types';
 
-// TODO BFS, DFS
-
 export class Graph implements IGraph {
   private nodes: INodes = {};
   private structure: IConnections<IEdgesStatistics> = {};
@@ -104,56 +102,33 @@ export class Graph implements IGraph {
   public dfs(
     startNodeName: string,
     callback: TIterationCallback,
-    settings: IDfsBfsSettings = { isMutable: false },
+    settings?: IDfsBfsSettings,
   ): Graph {
-    const graph = settings.isMutable ? this : this.copy();
-    const visited: Record<string, boolean> = {};
-
-    const stack = new Deque('stack');
-    stack.add(startNodeName);
-
-    while (!stack.isEmpty()) {
-      const currentNodeName = stack.pop<string>();
-
-      if (visited[currentNodeName]) {
-        continue;
-      } else {
-        visited[currentNodeName] = true;
-      }
-
-      const { newValue = null, stop = false } = callback(new Node({ name: currentNodeName })) ?? {};
-
-      if (stop) {
-        break;
-      }
-
-      if (newValue !== null) {
-        graph.nodes[currentNodeName].value = newValue;
-      }
-
-      for (const newNodeName of Object.keys(graph.structure[currentNodeName])) {
-        if (!visited[newNodeName]) {
-          stack.add(newNodeName);
-        }
-      }
-    }
-
-    return graph;
+    return this.goToNodes('dfs', startNodeName, callback, settings);
   }
 
   public bfs(
     startNodeName: string,
     callback: TIterationCallback,
-    settings: IDfsBfsSettings,
+    settings?: IDfsBfsSettings,
+  ): Graph {
+    return this.goToNodes('bfs', startNodeName, callback, settings);
+  }
+
+  private goToNodes(
+    typeOfGoing: 'bfs' | 'dfs',
+    startNodeName: string,
+    callback: TIterationCallback,
+    settings: IDfsBfsSettings = { isMutable: false },
   ): Graph {
     const graph = settings.isMutable ? this : this.copy();
     const visited: Record<string, boolean> = {};
 
-    const stack = new Deque('queue');
-    stack.add(startNodeName);
+    const deque = new Deque(typeOfGoing === 'bfs' ? 'queue' : 'stack');
+    deque.add(startNodeName);
 
-    while (!stack.isEmpty()) {
-      const currentNodeName = stack.pop<string>();
+    while (!deque.isEmpty()) {
+      const currentNodeName = deque.pop<string>();
 
       if (visited[currentNodeName]) {
         continue;
@@ -173,7 +148,7 @@ export class Graph implements IGraph {
 
       for (const newNodeName of Object.keys(graph.structure[currentNodeName])) {
         if (!visited[newNodeName]) {
-          stack.add(newNodeName);
+          deque.add(newNodeName);
         }
       }
     }

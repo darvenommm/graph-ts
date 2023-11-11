@@ -49,5 +49,6 @@ export interface IGraph {
 
   copy(): Graph;
 
-  dfs(startNodeName: string, callback: TIterationCallback, settings: IDfsBfsSettings): Graph;
+  bfs(startNodeName: string, callback: TIterationCallback, settings?: IDfsBfsSettings): Graph;
+  dfs(startNodeName: string, callback: TIterationCallback, settings?: IDfsBfsSettings): Graph;
 }
