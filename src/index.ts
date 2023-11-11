@@ -1,4 +1,4 @@
-import { Graph } from './graphs/graph.js';
+import { Graph } from './graphs/index.js';
 
 const nodes = [];
 
@@ -30,9 +30,3 @@ const graph = new Graph(nodes, {
     F: [{ weight: 3 }, { weight: -2 }],
   },
 });
-
-const newGraph = graph.copy();
-
-graph.addNodes({ name: 'hello' });
-
-console.log(String(newGraph));

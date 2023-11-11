@@ -1,7 +1,6 @@
-import type { Node } from '../node/node';
-import type { Edge } from '../edge/edge';
-import type { INodeSettings } from '../node/types';
-import type { IEdgeSettings } from '../edge/types';
+import type { INodeSettings, Node } from '../node/index';
+import type { IEdgeSettings, Edge } from '../edge/index';
+import type { Graph } from './graph';
 
 export interface INodes<T = Node> {
   [nodeName: string]: T;
@@ -33,6 +32,12 @@ export type TExtendedEdgesStatistics = TEdgesStatisticsWithEmptyValues & {
   minDouble: Edge | null;
 };
 
+export type TIterationCallback = (node: Node) => { newValue?: any; stop?: boolean } | void;
+
+export interface IDfsBfsSettings {
+  isMutable: boolean;
+}
+
 export interface IGraph {
   show(): void;
 
@@ -42,5 +47,7 @@ export interface IGraph {
   addConnections(connectionsSettings: IConnections): void;
   removeAllConnections(fromNode: INodeSettings, toNode: INodeSettings): void;
 
-  copy(): IGraph;
+  copy(): Graph;
+
+  dfs(startNodeName: string, callback: TIterationCallback, settings: IDfsBfsSettings): Graph;
 }

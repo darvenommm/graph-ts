@@ -1,7 +1,8 @@
 import deepcopy from 'deepcopy';
 
-import { Node } from '../node/node.js';
-import { Edge } from '../edge/edge.js';
+import { Node } from '../node/index.js';
+import { Edge } from '../edge/index.js';
+import { Deque } from '../deque/index.js';
 import { ErrorNotFoundNode, ErrorNodeExist, ErrorGraphTransformToPrimitive } from './errors.js';
 
 import type {
@@ -13,9 +14,10 @@ import type {
   TEdgesStatisticsWithEmptyValues,
   TExtendedEdgesStatistics,
   IGraph,
+  TIterationCallback,
+  IDfsBfsSettings,
 } from './types.js';
 import type { INodeSettings } from '../node/types';
-import type { IEdgeSettings } from '../edge/types';
 
 // TODO BFS, DFS
 
@@ -92,11 +94,91 @@ export class Graph implements IGraph {
     delete this.structure[toNodeName][fromNodeName];
   }
 
-  public copy(): IGraph {
+  public copy(): Graph {
     return Object.create(
       Object.getPrototypeOf(this),
       deepcopy(Object.getOwnPropertyDescriptors(this)),
     );
+  }
+
+  public dfs(
+    startNodeName: string,
+    callback: TIterationCallback,
+    settings: IDfsBfsSettings = { isMutable: false },
+  ): Graph {
+    const graph = settings.isMutable ? this : this.copy();
+    const visited: Record<string, boolean> = {};
+
+    const stack = new Deque('stack');
+    stack.add(startNodeName);
+
+    while (!stack.isEmpty()) {
+      const currentNodeName = stack.pop<string>();
+
+      if (visited[currentNodeName]) {
+        continue;
+      } else {
+        visited[currentNodeName] = true;
+      }
+
+      const { newValue = null, stop = false } = callback(new Node({ name: currentNodeName })) ?? {};
+
+      if (stop) {
+        break;
+      }
+
+      if (newValue !== null) {
+        graph.nodes[currentNodeName].value = newValue;
+      }
+
+      for (const newNodeName of Object.keys(graph.structure[currentNodeName])) {
+        if (!visited[newNodeName]) {
+          stack.add(newNodeName);
+        }
+      }
+    }
+
+    return graph;
+  }
+
+  public bfs(
+    startNodeName: string,
+    callback: TIterationCallback,
+    settings: IDfsBfsSettings,
+  ): Graph {
+    const graph = settings.isMutable ? this : this.copy();
+    const visited: Record<string, boolean> = {};
+
+    const stack = new Deque('queue');
+    stack.add(startNodeName);
+
+    while (!stack.isEmpty()) {
+      const currentNodeName = stack.pop<string>();
+
+      if (visited[currentNodeName]) {
+        continue;
+      } else {
+        visited[currentNodeName] = true;
+      }
+
+      const { newValue = null, stop = false } = callback(new Node({ name: currentNodeName })) ?? {};
+
+      if (stop) {
+        break;
+      }
+
+      if (newValue !== null) {
+        graph.nodes[currentNodeName].value = newValue;
+      }
+
+      for (const newNodeName of Object.keys(graph.structure[currentNodeName])) {
+        if (!visited[newNodeName]) {
+          stack.add(newNodeName);
+        }
+      }
+    }
+
+    return graph;
   }
 
   private initNodes(nodesSettings: TNodesSettings): void {
@@ -231,14 +313,17 @@ export class Graph implements IGraph {
     let result = '';
 
     for (const [fromNodeName, connections] of Object.entries(this.structure)) {
-      result += `Node: ${fromNodeName}\n`;
+      const fromNode = this.nodes[fromNodeName];
+      result += `Node: ${fromNodeName}, Value: ${fromNode.value}\n`;
 
       if (Object.entries(connections).length === 0) {
         result += '\tNo connections\n';
       }
 
       for (const [toNodeName, { min, max, all }] of Object.entries(connections)) {
-        result += `\t Node: ${toNodeName} <-> Edge min: ${min.weight}, max: ${max.weight}, count: ${all.length}\n`;
+        const toNode = this.nodes[toNodeName];
+
+        result += `\t Node: ${toNodeName}, Value: ${toNode.value} <-> Edge min: ${min.weight}, max: ${max.weight}, count: ${all.length}\n`;
       }
 
       result += '\n';
