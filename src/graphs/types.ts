@@ -32,7 +32,10 @@ export type TExtendedEdgesStatistics = TEdgesStatisticsWithEmptyValues & {
   minDouble: Edge | null;
 };
 
-export type TIterationCallback = (node: Node) => { newValue?: any; stop?: boolean } | void;
+export type TIterationCallback = (
+  node: Node,
+  stepsCount: number,
+) => { newValue?: any; stop?: boolean } | void;
 
 export interface IDfsBfsSettings {
   isMutable: boolean;
@@ -42,13 +45,15 @@ export interface IGraph {
   show(): void;
 
   addNodes(nodesSettings: TNodesSettings): void;
-  removeNodes(nodesSettings: TNodesSettings): void;
+  removeNodes(nodeNames: string | string[]): void;
 
   addConnections(connectionsSettings: IConnections): void;
-  removeAllConnections(fromNode: INodeSettings, toNode: INodeSettings): void;
+  removeAllConnections(fromNodeName: string, toNodeName: string): void;
 
   copy(): Graph;
 
   bfs(startNodeName: string, callback: TIterationCallback, settings?: IDfsBfsSettings): Graph;
   dfs(startNodeName: string, callback: TIterationCallback, settings?: IDfsBfsSettings): Graph;
+
+  getMinSteps(fromNodeName: string, toNodeName: string): number;
 }

@@ -2,31 +2,60 @@ import { Graph } from './graphs/index.js';
 
 const nodes = [];
 
-for (const character of 'ABCDEF') {
+const characters = 'ABCDEFGHIJKLMN';
+
+for (const character of characters) {
   nodes.push({ name: character });
 }
 
-const graph = new Graph(nodes, {
+const connections = {
   A: {
-    B: { weight: 13 },
-    C: { weight: 7, isBidirectional: false },
+    B: { weight: 7, isBidirectional: false },
+    C: { weight: 3, isBidirectional: false },
+    D: { weight: 4, isBidirectional: false },
   },
   B: {
-    D: { weight: 12 },
+    G: { weight: 8, isBidirectional: false },
   },
-  D: {
-    B: { weight: 10 },
-    E: { weight: -7, isBidirectional: false },
+  C: {
+    B: { weight: 12, isBidirectional: false },
+    D: { weight: 5, isBidirectional: false },
+    F: { weight: 2, isBidirectional: false },
   },
   E: {
-    D: { weight: 7, isBidirectional: false },
-    C: { weight: 3, isBidirectional: false },
+    H: { weight: 8, isBidirectional: false },
   },
   F: {
-    C: [
-      { weight: 5, isBidirectional: false },
-      { weight: 4, isBidirectional: false },
-    ],
-    F: [{ weight: 3 }, { weight: -2 }],
+    D: { weight: 10, isBidirectional: false },
   },
-});
+  G: {
+    E: { weight: 3, isBidirectional: false },
+    J: { weight: 5, isBidirectional: false },
+  },
+  H: {
+    J: { weight: 1, isBidirectional: false },
+    L: { weight: 8, isBidirectional: false },
+  },
+  I: {
+    E: { weight: 3, isBidirectional: false },
+  },
+  J: {
+    K: { weight: 2, isBidirectional: false },
+    N: { weight: 3 },
+  },
+  K: {
+    L: { weight: 1, isBidirectional: false },
+  },
+  L: {
+    H: { weight: 7, isBidirectional: false },
+    I: { weight: 22, isBidirectional: false },
+    M: { weight: 17, isBidirectional: false },
+  },
+  N: {
+    N: { weight: 1 },
+  },
+};
+
+const graph = new Graph(nodes, connections);
+
+console.log(graph.getMinSteps('D', 'A'));

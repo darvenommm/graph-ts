@@ -47,14 +47,12 @@ export class Graph implements IGraph {
     }
   }
 
-  public removeNodes(nodesSettings: TNodesSettings): void {
-    if (!Array.isArray(nodesSettings)) {
-      nodesSettings = [nodesSettings];
+  public removeNodes(nodesNames: string | string[]): void {
+    if (!Array.isArray(nodesNames)) {
+      nodesNames = [nodesNames];
     }
 
-    for (const nodeSettings of nodesSettings) {
-      const node = new Node(nodeSettings);
-      const nodeName = node.name;
+    for (const nodeName of nodesNames) {
       this.checkExistingNode(nodeName);
 
       delete this.nodes[nodeName];
@@ -81,10 +79,7 @@ export class Graph implements IGraph {
     }
   }
 
-  public removeAllConnections(fromNode: INodeSettings, toNode: INodeSettings): void {
-    const fromNodeName = fromNode.name;
-    const toNodeName = toNode.name;
-
+  public removeAllConnections(fromNodeName: string, toNodeName: string): void {
     this.checkExistingNode(fromNodeName);
     this.checkExistingNode(fromNodeName);
 
@@ -115,14 +110,35 @@ export class Graph implements IGraph {
     return this.goToNodes('bfs', startNodeName, callback, settings);
   }
 
+  public getMinSteps(fromNodeName: string, toNodeName: string): number {
+    for (const nodeName of [fromNodeName, toNodeName]) {
+      this.checkExistingNode(nodeName);
+    }
+
+    let result = -1;
+
+    this.dfs(fromNodeName, (node, stepsCount) => {
+      if (node.name === toNodeName) {
+        result = stepsCount;
+
+        return { stop: true };
+      }
+    });
+
+    return result;
+  }
+
   private goToNodes(
     typeOfGoing: 'bfs' | 'dfs',
     startNodeName: string,
     callback: TIterationCallback,
     settings: IDfsBfsSettings = { isMutable: false },
   ): Graph {
+    this.checkExistingNode(startNodeName);
+
     const graph = settings.isMutable ? this : this.copy();
     const visited: Record<string, boolean> = {};
+    const steps: Record<string, number> = { [startNodeName]: 0 };
 
     const deque = new Deque(typeOfGoing === 'bfs' ? 'queue' : 'stack');
     deque.add(startNodeName);
@@ -136,7 +152,8 @@ export class Graph implements IGraph {
         visited[currentNodeName] = true;
       }
 
-      const { newValue = null, stop = false } = callback(new Node({ name: currentNodeName })) ?? {};
+      const { newValue = null, stop = false } =
+        callback(this.nodes[currentNodeName], steps[currentNodeName]) ?? {};
 
       if (stop) {
         break;
@@ -147,9 +164,12 @@ export class Graph implements IGraph {
       }
 
       for (const newNodeName of Object.keys(graph.structure[currentNodeName])) {
-        if (!visited[newNodeName]) {
-          deque.add(newNodeName);
+        if (visited[newNodeName]) {
+          continue;
         }
+
+        deque.add(newNodeName);
+        steps[newNodeName] = steps[currentNodeName] + 1;
       }
     }
 
