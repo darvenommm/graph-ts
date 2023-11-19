@@ -1,24 +1,24 @@
 import { ErrorNodeTransformToPrimitive, ErrorEmptyNodeName } from './errors.js';
 
-import type { INodeSettings } from './types';
+import type { INodeSettings, INode } from './types';
 
-export class Node {
-  #name: string;
+export class Node implements INode {
+  private readonly _name: string;
   public value: unknown;
 
   constructor(nodeSettings: INodeSettings) {
     const { name, value = null } = nodeSettings;
-    this.#checkNodeNameValue(name);
+    this.checkNodeNameValue(name);
 
-    this.#name = name;
+    this._name = name;
     this.value = value;
   }
 
   get name(): string {
-    return this.#name;
+    return this._name;
   }
 
-  #checkNodeNameValue(newName: string): never | void {
+  private checkNodeNameValue(newName: string): never | void {
     if (!newName) {
       throw new ErrorEmptyNodeName();
     }

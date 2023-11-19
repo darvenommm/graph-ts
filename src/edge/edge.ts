@@ -1,25 +1,25 @@
 import { ErrorEdgeTransformToPrimitive } from './errors.js';
 
-import type { IEdgeSettings } from './types';
+import type { IEdgeSettings, IEdge } from './types';
 
 const DEFAULT_EDGE_SETTINGS: IEdgeSettings = {
   weight: 0,
   isBidirectional: true,
 };
 
-export class Edge {
+export class Edge implements IEdge {
+  private readonly _isBidirectional: boolean;
   public weight: number;
-  #isBidirectional: boolean;
 
   constructor(edgeSettings: IEdgeSettings = DEFAULT_EDGE_SETTINGS) {
     const { weight, isBidirectional = true } = edgeSettings;
 
     this.weight = weight;
-    this.#isBidirectional = isBidirectional;
+    this._isBidirectional = isBidirectional;
   }
 
   get isBidirectional(): boolean {
-    return this.#isBidirectional;
+    return this._isBidirectional;
   }
 
   [Symbol.toPrimitive](hint: 'string' | 'number' | 'default'): number | never {

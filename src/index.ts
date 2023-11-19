@@ -56,6 +56,25 @@ const connections = {
   },
 };
 
-const graph = new Graph(nodes, connections);
+const graphSettings = {
+  hasNegativeEdges: false,
+};
 
-console.log(graph.getMinSteps('D', 'A'));
+const graph = new Graph(nodes, connections, graphSettings);
+
+// graph.calculateAllDistances();
+
+console.log(graph.getMinDistance('A', 'I'));
+console.log(graph.getMinDistance('A', 'C'));
+console.log(graph.getMinDistance('H', 'M'));
+console.log(graph.getMinDistance('J', 'D'));
+console.log(graph.getMinDistance('K', 'N'));
+console.log(graph.getMinDistance('N', 'N'));
+console.log('----------------------------------------------');
+graph.calculateAllDistances();
+console.log(graph.getMinDistance('A', 'I'));
+console.log(graph.getMinDistance('A', 'C'));
+console.log(graph.getMinDistance('H', 'M'));
+console.log(graph.getMinDistance('J', 'D'));
+console.log(graph.getMinDistance('K', 'N'));
+console.log(graph.getMinDistance('N', 'N'));

@@ -27,15 +27,12 @@ export type TEdgesStatisticsWithEmptyValues<T = IEdgesStatistics> = {
 };
 
 export type TExtendedEdgesStatistics = TEdgesStatisticsWithEmptyValues & {
-  allDouble: Edge[] | [];
-  maxDouble: Edge | null;
-  minDouble: Edge | null;
+  allBidirectional: Edge[] | [];
+  maxBidirectional: Edge | null;
+  minBidirectional: Edge | null;
 };
 
-export type TIterationCallback = (
-  node: Node,
-  stepsCount: number,
-) => { newValue?: any; stop?: boolean } | void;
+export type TIterationCallback = (node: Node, stepsCount: number) => { stop?: boolean } | void;
 
 export interface IDfsBfsSettings {
   isMutable: boolean;
@@ -48,7 +45,7 @@ export interface IGraph {
   removeNodes(nodeNames: string | string[]): void;
 
   addConnections(connectionsSettings: IConnections): void;
-  removeAllConnections(fromNodeName: string, toNodeName: string): void;
+  removeConnections(fromNodeName: string, toNodeName: string): void;
 
   copy(): Graph;
 
@@ -56,4 +53,11 @@ export interface IGraph {
   dfs(startNodeName: string, callback: TIterationCallback, settings?: IDfsBfsSettings): Graph;
 
   getMinSteps(fromNodeName: string, toNodeName: string): number;
+
+  getMinDistance(fromNodeName: string, toNodeName: string): number | null;
+  calculateAllDistances(): void;
+}
+
+export interface IGraphSettings {
+  hasNegativeEdges: null | boolean;
 }

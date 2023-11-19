@@ -5,14 +5,14 @@ export interface IDequeNode {
   removeNext(): void;
 
   get next(): DequeNode | null;
-  get value(): any;
+  get value(): unknown;
 }
 
 export type TDequeType = 'stack' | 'queue';
 
 export interface IDeque {
-  add(newValue: any): void;
-  pop<T>(): T | never;
+  add(newValue: unknown): void;
+  pop(): unknown;
   isEmpty(): boolean;
   show(): void;
 

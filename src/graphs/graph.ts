@@ -14,18 +14,31 @@ import type {
   TEdgesStatisticsWithEmptyValues,
   TExtendedEdgesStatistics,
   IGraph,
+  IGraphSettings,
   TIterationCallback,
   IDfsBfsSettings,
-} from './types.js';
-import type { INodeSettings } from '../node/types';
+} from './types';
+
+const DEFAULT_GRAPH_SETTINGS: IGraphSettings = {
+  hasNegativeEdges: null,
+};
 
 export class Graph implements IGraph {
   private nodes: INodes = {};
   private structure: IConnections<IEdgesStatistics> = {};
 
-  constructor(nodesSettings: TNodesSettings, connectionsSettings: IConnections) {
+  private hasNegativeEdges: boolean = false;
+
+  private hasCalculatedDistance = false;
+  private calculatedDistances: Record<string, Record<string, number>> = {};
+
+  constructor(
+    nodesSettings: TNodesSettings,
+    connectionsSettings: IConnections,
+    graphSettings: IGraphSettings = DEFAULT_GRAPH_SETTINGS,
+  ) {
     this.initNodes(nodesSettings);
-    this.initStructure(connectionsSettings);
+    this.initStructure(connectionsSettings, graphSettings);
   }
 
   public show(): void {
@@ -40,11 +53,13 @@ export class Graph implements IGraph {
     for (const nodeSettings of nodesSettings) {
       const node = new Node(nodeSettings);
       const nodeName = node.name;
-      this.checkNotFoundingNode(nodeName);
+      this.checkNotFoundingNodes(nodeName);
 
       this.nodes[nodeName] = node;
       this.structure[nodeName] = {};
     }
+
+    this.resetCalculatedDistances();
   }
 
   public removeNodes(nodesNames: string | string[]): void {
@@ -53,38 +68,43 @@ export class Graph implements IGraph {
     }
 
     for (const nodeName of nodesNames) {
-      this.checkExistingNode(nodeName);
+      this.checkExistingNodes(nodeName);
 
       delete this.nodes[nodeName];
       delete this.structure[nodeName];
 
-      for (const [fromNodeName, connections] of Object.entries(this.structure)) {
-        if (fromNodeName === nodeName) {
-          continue;
-        }
-
+      for (const connections of Object.values(this.structure)) {
         delete connections[nodeName];
       }
     }
+
+    this.hasCalculatedDistance = false;
+    this.calculatedDistances = {};
+
+    this.resetCalculatedDistances();
   }
 
   public addConnections(connectionsSettings: IConnections): void {
     for (const [fromNodeName, newConnections] of Object.entries(connectionsSettings)) {
-      this.checkExistingNode(fromNodeName);
+      this.checkExistingNodes(fromNodeName);
 
       for (const [toNodeName, edges] of Object.entries(newConnections)) {
-        this.checkExistingNode(toNodeName);
+        this.checkExistingNodes(toNodeName);
         this.addNewEdgesStatisticsForNodes(fromNodeName, toNodeName, edges);
       }
     }
+
+    this.resetCalculatedDistances();
   }
 
-  public removeAllConnections(fromNodeName: string, toNodeName: string): void {
-    this.checkExistingNode(fromNodeName);
-    this.checkExistingNode(fromNodeName);
+  public removeConnections(fromNodeName: string, toNodeName: string): void {
+    this.checkExistingNodes([fromNodeName, toNodeName]);
 
     delete this.structure[fromNodeName][toNodeName];
     delete this.structure[toNodeName][fromNodeName];
+
+    this.updateHavingNegativeEdges();
+    this.resetCalculatedDistances();
   }
 
   public copy(): Graph {
@@ -92,14 +112,6 @@ export class Graph implements IGraph {
       Object.getPrototypeOf(this),
       deepcopy(Object.getOwnPropertyDescriptors(this)),
     );
-  }
-
-  public dfs(
-    startNodeName: string,
-    callback: TIterationCallback,
-    settings?: IDfsBfsSettings,
-  ): Graph {
-    return this.goToNodes('dfs', startNodeName, callback, settings);
   }
 
   public bfs(
@@ -110,14 +122,20 @@ export class Graph implements IGraph {
     return this.goToNodes('bfs', startNodeName, callback, settings);
   }
 
+  public dfs(
+    startNodeName: string,
+    callback: TIterationCallback,
+    settings?: IDfsBfsSettings,
+  ): Graph {
+    return this.goToNodes('dfs', startNodeName, callback, settings);
+  }
+
   public getMinSteps(fromNodeName: string, toNodeName: string): number {
-    for (const nodeName of [fromNodeName, toNodeName]) {
-      this.checkExistingNode(nodeName);
-    }
+    this.checkExistingNodes(fromNodeName);
 
     let result = -1;
 
-    this.dfs(fromNodeName, (node, stepsCount) => {
+    this.bfs(fromNodeName, (node, stepsCount) => {
       if (node.name === toNodeName) {
         result = stepsCount;
 
@@ -128,23 +146,46 @@ export class Graph implements IGraph {
     return result;
   }
 
+  public getMinDistance(fromNodeName: string, toNodeName: string): number | null {
+    this.checkExistingNodes([fromNodeName, toNodeName]);
+
+    if (this.hasCalculatedDistance) {
+      return this.calculatedDistances[fromNodeName][toNodeName];
+    }
+
+    if (!this.hasNegativeEdges) {
+      return this.getDistanceUsingDijkstra(fromNodeName, toNodeName);
+    }
+
+    console.log('floyd');
+    return 3;
+  }
+
+  public calculateAllDistances(): void {
+    if (this.hasCalculatedDistance) {
+      return;
+    }
+
+    this.calculateDistancesUsingFloydWarshall();
+  }
+
   private goToNodes(
-    typeOfGoing: 'bfs' | 'dfs',
+    typeOfGoing: 'dfs' | 'bfs',
     startNodeName: string,
     callback: TIterationCallback,
     settings: IDfsBfsSettings = { isMutable: false },
   ): Graph {
-    this.checkExistingNode(startNodeName);
+    this.checkExistingNodes(startNodeName);
 
     const graph = settings.isMutable ? this : this.copy();
     const visited: Record<string, boolean> = {};
     const steps: Record<string, number> = { [startNodeName]: 0 };
 
-    const deque = new Deque(typeOfGoing === 'bfs' ? 'queue' : 'stack');
+    const deque = new Deque<string>(typeOfGoing === 'bfs' ? 'stack' : 'queue');
     deque.add(startNodeName);
 
     while (!deque.isEmpty()) {
-      const currentNodeName = deque.pop<string>();
+      const currentNodeName = deque.pop();
 
       if (visited[currentNodeName]) {
         continue;
@@ -152,24 +193,22 @@ export class Graph implements IGraph {
         visited[currentNodeName] = true;
       }
 
-      const { newValue = null, stop = false } =
-        callback(this.nodes[currentNodeName], steps[currentNodeName]) ?? {};
+      const { stop = false } = callback(this.nodes[currentNodeName], steps[currentNodeName]) ?? {};
 
       if (stop) {
         break;
       }
 
-      if (newValue !== null) {
-        graph.nodes[currentNodeName].value = newValue;
-      }
-
-      for (const newNodeName of Object.keys(graph.structure[currentNodeName])) {
-        if (visited[newNodeName]) {
+      for (const closestNodeName of Object.keys(graph.structure[currentNodeName])) {
+        if (visited[closestNodeName]) {
           continue;
         }
 
-        deque.add(newNodeName);
-        steps[newNodeName] = steps[currentNodeName] + 1;
+        if (!Number.isInteger(steps[closestNodeName])) {
+          steps[closestNodeName] = steps[currentNodeName] + 1;
+        }
+
+        deque.add(closestNodeName);
       }
     }
 
@@ -184,78 +223,76 @@ export class Graph implements IGraph {
     for (const nodeSettings of nodesSettings) {
       const node = new Node(nodeSettings);
       const nodeName = node.name;
-      this.checkNotFoundingNode(nodeName);
+      this.checkNotFoundingNodes(nodeName);
 
       this.nodes[nodeName] = node;
       this.structure[nodeName] = {};
     }
   }
 
-  private initStructure(connectionsSettings: IConnections): void {
+  private initStructure(connectionsSettings: IConnections, graphSettings: IGraphSettings): void {
     for (const [fromNodeName, connections] of Object.entries(connectionsSettings)) {
-      this.checkExistingNode(fromNodeName);
+      this.checkExistingNodes(fromNodeName);
 
       for (const [toNodeName, edgesSettings] of Object.entries(connections)) {
-        this.checkExistingNode(toNodeName);
+        this.checkExistingNodes(toNodeName);
         this.addNewEdgesStatisticsForNodes(fromNodeName, toNodeName, edgesSettings);
       }
+    }
+
+    if (graphSettings.hasNegativeEdges === null) {
+      this.updateHavingNegativeEdges();
     }
   }
 
   private addNewEdgesStatisticsForNodes(
     fromNodeName: string,
     toNodeName: string,
-    edgesStatistics: TEdgeSettings,
+    edgesSettings: TEdgeSettings,
   ): void {
-    const extendedEdgesStatistics = this.calculateEdgesStatistics(edgesStatistics);
+    const extendedEdgesStatistics = this.calculateEdgesStatistics(edgesSettings);
     const { min, max, all } = extendedEdgesStatistics;
-    const { minDouble, maxDouble, allDouble } = extendedEdgesStatistics;
+    const { minBidirectional, maxBidirectional, allBidirectional } = extendedEdgesStatistics;
 
     this.updateStatisticsForNodes(fromNodeName, toNodeName, { min, max, all });
     this.updateStatisticsForNodes(toNodeName, fromNodeName, {
-      min: minDouble,
-      max: maxDouble,
-      all: allDouble,
+      min: minBidirectional,
+      max: maxBidirectional,
+      all: allBidirectional,
     });
   }
 
-  private getEdgesStatistics(
-    fromNodeName: string,
-    toNodeName: string,
-  ): IEdgesStatistics | undefined {
-    return this.structure[fromNodeName][toNodeName];
-  }
-
   private calculateEdgesStatistics(edgesSettings: TEdgeSettings): TExtendedEdgesStatistics {
-    const { all, allDouble } = this.getSingleAndDoubleEdges(edgesSettings);
+    const { all, allBidirectional } = this.getSingleAndDoubleEdges(edgesSettings);
 
     const { min, max } = this.getMinAndMaxEdge(all);
-    const { min: minDouble, max: maxDouble } = this.getMinAndMaxEdge(allDouble);
+    const { min: minBidirectional, max: maxBidirectional } =
+      this.getMinAndMaxEdge(allBidirectional);
 
-    return { min, max, all, allDouble, minDouble, maxDouble };
+    return { min, max, all, allBidirectional, minBidirectional, maxBidirectional };
   }
 
   private getSingleAndDoubleEdges(
     edgesSettings: TEdgeSettings,
-  ): Pick<TExtendedEdgesStatistics, 'all' | 'allDouble'> {
+  ): Pick<TExtendedEdgesStatistics, 'all' | 'allBidirectional'> {
     if (!Array.isArray(edgesSettings)) {
       edgesSettings = [edgesSettings];
     }
 
     const all: Edge[] = [];
-    const allDouble: Edge[] = [];
+    const allBidirectional: Edge[] = [];
 
     for (const edgeSettings of edgesSettings) {
       const edge = new Edge(edgeSettings);
 
       if (edge.isBidirectional) {
-        allDouble.push(edge);
+        allBidirectional.push(edge);
       }
 
       all.push(edge);
     }
 
-    return { all, allDouble };
+    return { all, allBidirectional };
   }
 
   private getMinAndMaxEdge(edges: Edge[]): Pick<TEdgesStatisticsWithEmptyValues, 'min' | 'max'> {
@@ -290,7 +327,7 @@ export class Graph implements IGraph {
       return;
     }
 
-    const fromToStatistics = this.getEdgesStatistics(fromNodeName, toNodeName);
+    const fromToStatistics = this.structure[fromNodeName][toNodeName];
 
     if (!fromToStatistics) {
       this.structure[fromNodeName][toNodeName] = { min, max, all };
@@ -302,6 +339,21 @@ export class Graph implements IGraph {
       max: fromToStatistics.max > max ? fromToStatistics.max : max,
       all: [...fromToStatistics.all, ...all],
     };
+  }
+
+  private updateHavingNegativeEdges(): void {
+    for (const connections of Object.values(this.structure)) {
+      for (const statistics of Object.values(connections)) {
+        for (const edge of statistics.all) {
+          if (edge.weight < 0) {
+            this.hasNegativeEdges = true;
+            return;
+          }
+        }
+      }
+    }
+
+    this.hasNegativeEdges = false;
   }
 
   private getGraphInString(): string {
@@ -327,6 +379,107 @@ export class Graph implements IGraph {
     return result;
   }
 
+  private getDistanceUsingDijkstra(fromNodeName: string, toNodeName: string): number {
+    const calculatedDistance: Record<string, number> = {};
+    const visited: Record<string, boolean> = {};
+
+    for (const nodeName of Object.keys(this.nodes)) {
+      calculatedDistance[nodeName] = Infinity;
+    }
+
+    calculatedDistance[fromNodeName] = this.structure[fromNodeName][fromNodeName]?.min.weight ?? 0;
+
+    for (let i = 0; i < Object.keys(calculatedDistance).length; ++i) {
+      const minNodeName = this.getNodeNameWithLowestDistance(calculatedDistance, visited);
+      visited[minNodeName] = true;
+
+      if (calculatedDistance[minNodeName] === Infinity) {
+        break;
+      }
+
+      for (const [closestNode, edges] of Object.entries(this.structure[minNodeName])) {
+        const new_distance: number = calculatedDistance[minNodeName] + edges.min.weight;
+
+        if (new_distance < calculatedDistance[closestNode]) {
+          calculatedDistance[closestNode] = new_distance;
+        }
+      }
+    }
+
+    return calculatedDistance[toNodeName];
+  }
+
+  private getNodeNameWithLowestDistance(
+    distances: Record<string, number>,
+    visited: Record<string, boolean>,
+  ): string {
+    let name: string = '';
+    let min: number = Infinity;
+
+    for (const [nodeName, distance] of Object.entries(distances)) {
+      if (!visited[nodeName] && min >= distance) {
+        min = distance;
+        name = nodeName;
+      }
+    }
+
+    if (name === '') {
+      throw Error('The node name cannot be a empty string!');
+    }
+
+    return name;
+  }
+
+  private calculateDistancesUsingFloydWarshall(): void {
+    const nodesNames = Object.keys(this.nodes);
+
+    const calculatedDistances: Record<string, Record<string, number>> = {};
+    for (const fromNodeName of nodesNames) {
+      calculatedDistances[fromNodeName] = {};
+
+      for (const toNodeName of nodesNames) {
+        if (this.structure[fromNodeName][toNodeName]) {
+          calculatedDistances[fromNodeName][toNodeName] =
+            this.structure[fromNodeName][toNodeName].min.weight;
+        } else if (fromNodeName === toNodeName) {
+          calculatedDistances[fromNodeName][toNodeName] = 0;
+        } else {
+          calculatedDistances[fromNodeName][toNodeName] = Infinity;
+        }
+      }
+    }
+
+    for (const betweenNodeName of nodesNames) {
+      for (const startNodeName of nodesNames) {
+        if (calculatedDistances[startNodeName][betweenNodeName] === Infinity) {
+          continue;
+        }
+
+        for (const endNodeName of nodesNames) {
+          if (calculatedDistances[betweenNodeName][endNodeName] === Infinity) {
+            continue;
+          }
+
+          const new_distance =
+            calculatedDistances[startNodeName][betweenNodeName] +
+            calculatedDistances[betweenNodeName][endNodeName];
+
+          if (calculatedDistances[startNodeName][endNodeName] > new_distance) {
+            calculatedDistances[startNodeName][endNodeName] = new_distance;
+          }
+        }
+      }
+    }
+
+    this.calculatedDistances = calculatedDistances;
+    this.hasCalculatedDistance = true;
+  }
+
+  private resetCalculatedDistances(): void {
+    this.hasCalculatedDistance = false;
+    this.calculatedDistances = {};
+  }
+
   [Symbol.toPrimitive](hint: 'string' | 'number' | 'default'): string | never {
     if (hint === 'number') {
       throw new ErrorGraphTransformToPrimitive();
@@ -335,15 +488,27 @@ export class Graph implements IGraph {
     return this.getGraphInString();
   }
 
-  private checkNotFoundingNode(nodeName: string): never | void {
-    if (this.nodes[nodeName]) {
-      throw new ErrorNodeExist();
+  private checkNotFoundingNodes(nodeNames: string | string[]): never | void {
+    if (!Array.isArray(nodeNames)) {
+      nodeNames = [nodeNames];
+    }
+
+    for (const nodeName of nodeNames) {
+      if (this.nodes[nodeName]) {
+        throw new ErrorNodeExist();
+      }
     }
   }
 
-  private checkExistingNode(nodeName: string): never | void {
-    if (!this.nodes[nodeName]) {
-      throw new ErrorNotFoundNode();
+  private checkExistingNodes(nodeNames: string | string[]): never | void {
+    if (!Array.isArray(nodeNames)) {
+      nodeNames = [nodeNames];
+    }
+
+    for (const nodeName of nodeNames) {
+      if (!this.nodes[nodeName]) {
+        throw new ErrorNotFoundNode();
+      }
     }
   }
 }

@@ -3,7 +3,7 @@ import { ErrorDequeIsEmpty } from './errors.js';
 
 import type { IDeque, TDequeType } from './types';
 
-export class Deque implements IDeque {
+export class Deque<T> implements IDeque {
   private readonly _type: TDequeType;
   private _size: number;
   private head: DequeNode | null;
@@ -24,7 +24,7 @@ export class Deque implements IDeque {
     }
   }
 
-  public pop<T>(): T {
+  public pop(): T {
     if (this.isEmpty()) {
       throw new ErrorDequeIsEmpty();
     }
