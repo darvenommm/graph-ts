@@ -1,3 +1,3 @@
-export { Edge } from './edge.js';
+export { Edge } from './edge';
 
 export type { IEdgeSettings } from './types';

@@ -1,5 +1,3 @@
-import { Graph } from './graph';
-
 import type { IConnections, TNodesSettings } from 'src/graph/types';
 
 const nodes: TNodesSettings = [];
@@ -56,5 +54,4 @@ const connections: IConnections = {
   },
 };
 
-const graph = new Graph(nodes, connections, { hasNegativeEdges: true });
-console.log(graph.getMinDistance('A', 'I'));
+export { connections, nodes };

@@ -1,1 +1,1 @@
-export { Deque } from './deque.js';
+export { Deque } from './deque';

@@ -1,4 +1,4 @@
-import { ErrorEdgeTransformToPrimitive } from './errors.js';
+import { ErrorEdgeTransformToPrimitive } from './errors';
 
 import type { IEdgeSettings, IEdge } from './types';
 

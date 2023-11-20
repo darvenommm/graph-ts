@@ -1,3 +1,3 @@
-export { Node } from './node.js';
+export { Node } from './node';
 
 export type { INodeSettings } from './types';

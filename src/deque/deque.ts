@@ -1,5 +1,5 @@
-import { DequeNode } from './deque-node.js';
-import { ErrorDequeIsEmpty } from './errors.js';
+import { DequeNode } from './deque-node';
+import { ErrorDequeIsEmpty } from './errors';
 
 import type { IDeque, TDequeType } from './types';
 

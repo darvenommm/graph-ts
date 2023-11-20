@@ -1,9 +1,9 @@
 import deepcopy from 'deepcopy';
 
-import { Node } from '../node/index.js';
-import { Edge } from '../edge/index.js';
-import { Deque } from '../deque/index.js';
-import { ErrorNotFoundNode, ErrorNodeExist, ErrorGraphTransformToPrimitive } from './errors.js';
+import { Node } from '../node/index';
+import { Edge } from '../edge/index';
+import { Deque } from '../deque/index';
+import { ErrorNotFoundNode, ErrorNodeExist, ErrorGraphTransformToPrimitive } from './errors';
 
 import type {
   INodes,
@@ -19,26 +19,22 @@ import type {
   IDfsBfsSettings,
 } from './types';
 
-const DEFAULT_GRAPH_SETTINGS: IGraphSettings = {
-  hasNegativeEdges: null,
-};
-
 export class Graph implements IGraph {
-  private nodes: INodes = {};
+  private nodes: INodes;
   private structure: IConnections<IEdgesStatistics> = {};
+  private settings: IGraphSettings;
 
-  private hasNegativeEdges: boolean = false;
-
-  private hasCalculatedDistance = false;
-  private calculatedDistances: Record<string, Record<string, number>> = {};
+  private calculatedDistances: Record<string, Record<string, number>> | null = null;
 
   constructor(
     nodesSettings: TNodesSettings,
     connectionsSettings: IConnections,
-    graphSettings: IGraphSettings = DEFAULT_GRAPH_SETTINGS,
+    graphSettings: Partial<Omit<IGraphSettings, 'isCalculated'>> = {},
   ) {
-    this.initNodes(nodesSettings);
-    this.initStructure(connectionsSettings, graphSettings);
+    this.settings = this.initGraphSettings(graphSettings);
+
+    this.nodes = this.initNodes(nodesSettings);
+    this.structure = this.initStructure(connectionsSettings);
   }
 
   public show(): void {
@@ -78,9 +74,6 @@ export class Graph implements IGraph {
       }
     }
 
-    this.hasCalculatedDistance = false;
-    this.calculatedDistances = {};
-
     this.resetCalculatedDistances();
   }
 
@@ -90,7 +83,7 @@ export class Graph implements IGraph {
 
       for (const [toNodeName, edges] of Object.entries(newConnections)) {
         this.checkExistingNodes(toNodeName);
-        this.addNewEdgesStatisticsForNodes(fromNodeName, toNodeName, edges);
+        this.addNewEdgesStatisticsForNodes(this.structure, fromNodeName, toNodeName, edges);
       }
     }
 
@@ -103,7 +96,6 @@ export class Graph implements IGraph {
     delete this.structure[fromNodeName][toNodeName];
     delete this.structure[toNodeName][fromNodeName];
 
-    this.updateHavingNegativeEdges();
     this.resetCalculatedDistances();
   }
 
@@ -149,20 +141,19 @@ export class Graph implements IGraph {
   public getMinDistance(fromNodeName: string, toNodeName: string): number | null {
     this.checkExistingNodes([fromNodeName, toNodeName]);
 
-    if (this.hasCalculatedDistance) {
-      return this.calculatedDistances[fromNodeName][toNodeName];
+    if (this.settings.isCalculated) {
+      return this.calculatedDistances![fromNodeName][toNodeName];
     }
 
-    if (!this.hasNegativeEdges) {
-      return this.getDistanceUsingDijkstra(fromNodeName, toNodeName);
+    if (this.settings.hasNegativeEdges) {
+      return this.calculateDistanceUsingFordBellman(fromNodeName, toNodeName);
     }
 
-    console.log('floyd');
-    return 3;
+    return this.getDistanceUsingDijkstra(fromNodeName, toNodeName);
   }
 
   public calculateAllDistances(): void {
-    if (this.hasCalculatedDistance) {
+    if (this.settings.isCalculated) {
       return;
     }
 
@@ -215,7 +206,19 @@ export class Graph implements IGraph {
     return graph;
   }
 
-  private initNodes(nodesSettings: TNodesSettings): void {
+  private initGraphSettings(
+    graphSettings: Partial<Omit<IGraphSettings, 'isCalculated'>>,
+  ): IGraphSettings {
+    return {
+      hasNegativeEdges: graphSettings.hasNegativeEdges ?? false,
+      isAcyclic: graphSettings.isAcyclic ?? false,
+      isCalculated: false,
+    };
+  }
+
+  private initNodes(nodesSettings: TNodesSettings): INodes {
+    const nodes: INodes = {};
+
     if (!Array.isArray(nodesSettings)) {
       nodesSettings = [nodesSettings];
     }
@@ -223,29 +226,34 @@ export class Graph implements IGraph {
     for (const nodeSettings of nodesSettings) {
       const node = new Node(nodeSettings);
       const nodeName = node.name;
-      this.checkNotFoundingNodes(nodeName);
 
-      this.nodes[nodeName] = node;
-      this.structure[nodeName] = {};
+      if (nodes[nodeName]) {
+        throw new ErrorNodeExist();
+      }
+
+      nodes[nodeName] = node;
     }
+
+    return nodes;
   }
 
-  private initStructure(connectionsSettings: IConnections, graphSettings: IGraphSettings): void {
+  private initStructure(connectionsSettings: IConnections): IConnections<IEdgesStatistics> {
+    const structure: IConnections<IEdgesStatistics> = {};
+
     for (const [fromNodeName, connections] of Object.entries(connectionsSettings)) {
       this.checkExistingNodes(fromNodeName);
 
       for (const [toNodeName, edgesSettings] of Object.entries(connections)) {
         this.checkExistingNodes(toNodeName);
-        this.addNewEdgesStatisticsForNodes(fromNodeName, toNodeName, edgesSettings);
+        this.addNewEdgesStatisticsForNodes(structure, fromNodeName, toNodeName, edgesSettings);
       }
     }
 
-    if (graphSettings.hasNegativeEdges === null) {
-      this.updateHavingNegativeEdges();
-    }
+    return structure;
   }
 
   private addNewEdgesStatisticsForNodes(
+    structure: IConnections<IEdgesStatistics>,
     fromNodeName: string,
     toNodeName: string,
     edgesSettings: TEdgeSettings,
@@ -254,8 +262,8 @@ export class Graph implements IGraph {
     const { min, max, all } = extendedEdgesStatistics;
     const { minBidirectional, maxBidirectional, allBidirectional } = extendedEdgesStatistics;
 
-    this.updateStatisticsForNodes(fromNodeName, toNodeName, { min, max, all });
-    this.updateStatisticsForNodes(toNodeName, fromNodeName, {
+    this.updateStatisticsForNodes(structure, fromNodeName, toNodeName, { min, max, all });
+    this.updateStatisticsForNodes(structure, toNodeName, fromNodeName, {
       min: minBidirectional,
       max: maxBidirectional,
       all: allBidirectional,
@@ -317,6 +325,7 @@ export class Graph implements IGraph {
   }
 
   private updateStatisticsForNodes(
+    structure: IConnections<IEdgesStatistics>,
     fromNodeName: string,
     toNodeName: string,
     edgesStatistics: TEdgesStatisticsWithEmptyValues,
@@ -327,33 +336,26 @@ export class Graph implements IGraph {
       return;
     }
 
-    const fromToStatistics = this.structure[fromNodeName][toNodeName];
+    if (!structure[fromNodeName]) {
+      structure[fromNodeName] = {};
+    }
+
+    if (!structure[toNodeName]) {
+      structure[toNodeName] = {};
+    }
+
+    const fromToStatistics = structure[fromNodeName][toNodeName];
 
     if (!fromToStatistics) {
-      this.structure[fromNodeName][toNodeName] = { min, max, all };
+      structure[fromNodeName][toNodeName] = { min, max, all };
       return;
     }
 
-    this.structure[fromNodeName][toNodeName] = {
+    structure[fromNodeName][toNodeName] = {
       min: fromToStatistics.min > min ? min : fromToStatistics.min,
       max: fromToStatistics.max > max ? fromToStatistics.max : max,
       all: [...fromToStatistics.all, ...all],
     };
-  }
-
-  private updateHavingNegativeEdges(): void {
-    for (const connections of Object.values(this.structure)) {
-      for (const statistics of Object.values(connections)) {
-        for (const edge of statistics.all) {
-          if (edge.weight < 0) {
-            this.hasNegativeEdges = true;
-            return;
-          }
-        }
-      }
-    }
-
-    this.hasNegativeEdges = false;
   }
 
   private getGraphInString(): string {
@@ -472,12 +474,60 @@ export class Graph implements IGraph {
     }
 
     this.calculatedDistances = calculatedDistances;
-    this.hasCalculatedDistance = true;
+    this.settings.isCalculated = true;
   }
 
   private resetCalculatedDistances(): void {
-    this.hasCalculatedDistance = false;
-    this.calculatedDistances = {};
+    this.settings.isCalculated = false;
+    this.calculatedDistances = null;
+  }
+
+  private calculateDistanceUsingFordBellman(
+    fromNodeName: string,
+    toNodeName: string,
+  ): number | null {
+    const distances: Record<string, number> = {};
+    for (const nodeName of Object.keys(this.nodes)) {
+      distances[nodeName] = Infinity;
+    }
+    distances[fromNodeName] = this.structure[fromNodeName][fromNodeName]?.min.weight ?? 0;
+
+    while (true) {
+      let wasUpdated = false;
+
+      for (const [fromNodeName, distance] of Object.entries(distances)) {
+        if (distance === Infinity) {
+          continue;
+        }
+
+        for (const [toNodeName, edgesStatistics] of Object.entries(this.structure[fromNodeName])) {
+          const newDistance = distances[fromNodeName] + edgesStatistics.min.weight;
+
+          if (distances[toNodeName] > newDistance) {
+            wasUpdated = true;
+            distances[toNodeName] = newDistance;
+          }
+        }
+      }
+
+      if (!wasUpdated) {
+        break;
+      }
+    }
+
+    for (const [fromNodeName, distance] of Object.entries(distances)) {
+      if (distance === Infinity) {
+        continue;
+      }
+
+      for (const [toNodeName, edgesStatistics] of Object.entries(this.structure[fromNodeName])) {
+        if (distances[toNodeName] > distances[fromNodeName] + edgesStatistics.min.weight) {
+          return null;
+        }
+      }
+    }
+
+    return distances[toNodeName];
   }
 
   [Symbol.toPrimitive](hint: 'string' | 'number' | 'default'): string | never {

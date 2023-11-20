@@ -1,4 +1,4 @@
-import { ErrorNodeTransformToPrimitive, ErrorEmptyNodeName } from './errors.js';
+import { ErrorNodeTransformToPrimitive, ErrorEmptyNodeName } from './errors';
 
 import type { INodeSettings, INode } from './types';
 

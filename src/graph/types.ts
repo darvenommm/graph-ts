@@ -59,5 +59,7 @@ export interface IGraph {
 }
 
 export interface IGraphSettings {
-  hasNegativeEdges: null | boolean;
+  hasNegativeEdges: boolean;
+  isAcyclic: boolean;
+  isCalculated: boolean;
 }
